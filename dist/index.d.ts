@@ -1,4 +1,4 @@
-import { RooguysOptions, TrackEventResponse, UserProfile, UserBadge, UserRank, LeaderboardResult, AnswerSubmission } from './types';
+import { RooguysOptions, TrackEventResponse, UserProfile, UserBadge, UserRank, LeaderboardResult, AnswerSubmission, AhaDeclarationResult, AhaScoreResult } from './types';
 export declare class Rooguys {
     private apiKey;
     private client;
@@ -24,6 +24,10 @@ export declare class Rooguys {
     };
     leaderboards: {
         getGlobal: (timeframe?: "all-time" | "weekly" | "monthly", page?: number, limit?: number) => Promise<LeaderboardResult>;
+    };
+    aha: {
+        declare: (userId: string, value: number) => Promise<AhaDeclarationResult>;
+        getUserScore: (userId: string) => Promise<AhaScoreResult>;
     };
     private handleError;
 }

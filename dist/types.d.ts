@@ -61,3 +61,22 @@ export interface AnswerSubmission {
     question_id: string;
     answer_option_id: string;
 }
+export interface AhaDeclarationResult {
+    success: boolean;
+    message: string;
+}
+export interface AhaScoreResult {
+    success: boolean;
+    data: {
+        user_id: string;
+        current_score: number;
+        declarative_score: number | null;
+        inferred_score: number | null;
+        status: 'not_started' | 'progressing' | 'activated';
+        history: {
+            initial: number | null;
+            initial_date: string | null;
+            previous: number | null;
+        };
+    };
+}

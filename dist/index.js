@@ -93,6 +93,33 @@ class Rooguys {
             },
             // Additional leaderboard methods can be added here following the same pattern
         };
+        this.aha = {
+            declare: async (userId, value) => {
+                // Validate value is between 1 and 5
+                if (!Number.isInteger(value) || value < 1 || value > 5) {
+                    throw new Error('Aha score value must be an integer between 1 and 5');
+                }
+                try {
+                    const response = await this.client.post('/aha/declare', {
+                        user_id: userId,
+                        value,
+                    });
+                    return response.data;
+                }
+                catch (error) {
+                    throw this.handleError(error);
+                }
+            },
+            getUserScore: async (userId) => {
+                try {
+                    const response = await this.client.get(`/users/${userId}/aha`);
+                    return response.data;
+                }
+                catch (error) {
+                    throw this.handleError(error);
+                }
+            },
+        };
         this.client = axios_1.default.create({
             baseURL: options.baseUrl || 'https://api.rooguys.com/v1',
             timeout: options.timeout || 10000,
