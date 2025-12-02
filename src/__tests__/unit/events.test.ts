@@ -24,14 +24,14 @@ describe('Events Resource', () => {
         mockSuccessResponse(mockResponses.trackEventResponse)
       );
 
-      const result = await client.events.track('purchase_completed', 'user_123', {
+      const result = await client.events.track('purchase-completed', 'user_123', {
         amount: 50.0,
       });
 
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
         '/event',
         {
-          event_name: 'purchase_completed',
+          event_name: 'purchase-completed',
           user_id: 'user_123',
           properties: { amount: 50.0 },
         },
@@ -45,12 +45,12 @@ describe('Events Resource', () => {
         mockSuccessResponse(mockResponses.trackEventResponse)
       );
 
-      const result = await client.events.track('user_login', 'user_456');
+      const result = await client.events.track('user-login', 'user_456');
 
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
         '/event',
         {
-          event_name: 'user_login',
+          event_name: 'user-login',
           user_id: 'user_456',
           properties: {},
         },
@@ -65,7 +65,7 @@ describe('Events Resource', () => {
       );
 
       const result = await client.events.track(
-        'purchase_completed',
+        'purchase-completed',
         'user_123',
         { amount: 50.0 },
         { includeProfile: true }
@@ -74,7 +74,7 @@ describe('Events Resource', () => {
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
         '/event',
         {
-          event_name: 'purchase_completed',
+          event_name: 'purchase-completed',
           user_id: 'user_123',
           properties: { amount: 50.0 },
         },
@@ -105,7 +105,7 @@ describe('Events Resource', () => {
         mockSuccessResponse(mockResponses.trackEventResponse)
       );
 
-      await client.events.track('user_login', 'user@example.com');
+      await client.events.track('user-login', 'user@example.com');
 
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
         '/event',
@@ -163,7 +163,7 @@ describe('Events Resource', () => {
       );
 
       await expect(
-        client.events.track('user_login', 'user_123')
+        client.events.track('user-login', 'user_123')
       ).rejects.toThrow('Internal server error');
     });
 
@@ -173,7 +173,7 @@ describe('Events Resource', () => {
       );
 
       await expect(
-        client.events.track('user_login', 'user_123')
+        client.events.track('user-login', 'user_123')
       ).rejects.toThrow('Event queue is full');
     });
 
@@ -183,7 +183,7 @@ describe('Events Resource', () => {
       mockAxiosInstance.post.mockRejectedValue(timeoutError);
 
       await expect(
-        client.events.track('user_login', 'user_123')
+        client.events.track('user-login', 'user_123')
       ).rejects.toThrow('timeout');
     });
 
