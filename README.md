@@ -28,7 +28,7 @@ Track user actions to award points and unlock badges.
 ```typescript
 try {
   const response = await client.events.track(
-    'purchase_completed', // Event name
+    'purchase-completed', // Event name
     'user_123',           // User ID
     { amount: 50.00 },    // Event properties
     { includeProfile: true } // Optional: Return updated profile

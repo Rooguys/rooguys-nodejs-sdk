@@ -30,7 +30,7 @@ class Rooguys {
         this.users = {
             get: async (userId) => {
                 try {
-                    const response = await this.client.get(`/user/${userId}`);
+                    const response = await this.client.get(`/user/${encodeURIComponent(userId)}`);
                     return response.data;
                 }
                 catch (error) {
@@ -48,7 +48,7 @@ class Rooguys {
             },
             getBadges: async (userId) => {
                 try {
-                    const response = await this.client.get(`/user/${userId}/badges`);
+                    const response = await this.client.get(`/user/${encodeURIComponent(userId)}/badges`);
                     return response.data;
                 }
                 catch (error) {
@@ -57,7 +57,7 @@ class Rooguys {
             },
             getRank: async (userId, timeframe = 'all-time') => {
                 try {
-                    const response = await this.client.get(`/user/${userId}/rank`, {
+                    const response = await this.client.get(`/user/${encodeURIComponent(userId)}/rank`, {
                         params: { timeframe },
                     });
                     return response.data;
@@ -68,7 +68,7 @@ class Rooguys {
             },
             submitAnswers: async (userId, questionnaireId, answers) => {
                 try {
-                    const response = await this.client.post(`/user/${userId}/answers`, {
+                    const response = await this.client.post(`/user/${encodeURIComponent(userId)}/answers`, {
                         questionnaire_id: questionnaireId,
                         answers,
                     });
@@ -91,7 +91,87 @@ class Rooguys {
                     throw this.handleError(error);
                 }
             },
-            // Additional leaderboard methods can be added here following the same pattern
+            list: async (page = 1, limit = 50, search) => {
+                try {
+                    const params = { page, limit };
+                    if (search) {
+                        params.search = search;
+                    }
+                    const response = await this.client.get('/leaderboards', { params });
+                    return response.data;
+                }
+                catch (error) {
+                    throw this.handleError(error);
+                }
+            },
+            getCustom: async (leaderboardId, page = 1, limit = 50, search) => {
+                try {
+                    const params = { page, limit };
+                    if (search) {
+                        params.search = search;
+                    }
+                    const response = await this.client.get(`/leaderboard/${encodeURIComponent(leaderboardId)}`, { params });
+                    return response.data;
+                }
+                catch (error) {
+                    throw this.handleError(error);
+                }
+            },
+            getUserRank: async (leaderboardId, userId) => {
+                try {
+                    const response = await this.client.get(`/leaderboard/${encodeURIComponent(leaderboardId)}/user/${encodeURIComponent(userId)}/rank`);
+                    return response.data;
+                }
+                catch (error) {
+                    throw this.handleError(error);
+                }
+            },
+        };
+        this.badges = {
+            list: async (page = 1, limit = 50, activeOnly = false) => {
+                try {
+                    const response = await this.client.get('/badges', {
+                        params: { page, limit, active_only: activeOnly },
+                    });
+                    return response.data;
+                }
+                catch (error) {
+                    throw this.handleError(error);
+                }
+            },
+        };
+        this.levels = {
+            list: async (page = 1, limit = 50) => {
+                try {
+                    const response = await this.client.get('/levels', {
+                        params: { page, limit },
+                    });
+                    return response.data;
+                }
+                catch (error) {
+                    throw this.handleError(error);
+                }
+            },
+        };
+        this.questionnaires = {
+            get: async (slug) => {
+                try {
+                    const response = await this.client.get(`/questionnaire/${slug}`);
+                    return response.data;
+                }
+                catch (error) {
+                    throw this.handleError(error);
+                }
+            },
+            getActive: async () => {
+                try {
+                    const response = await this.client.get('/questionnaire/active');
+                    return response.data;
+                }
+                catch (error) {
+                    throw this.handleError(error);
+                }
+            },
         };
         this.aha = {
             declare: async (userId, value) => {
@@ -112,7 +192,7 @@ class Rooguys {
             },
             getUserScore: async (userId) => {
                 try {
-                    const response = await this.client.get(`/users/${userId}/aha`);
+                    const response = await this.client.get(`/users/${encodeURIComponent(userId)}/aha`);
                     return response.data;
                 }
                 catch (error) {
@@ -133,7 +213,7 @@ class Rooguys {
         var _a, _b;
         if (axios_1.default.isAxiosError(error)) {
             const message = ((_b = (_a = error.response) === null || _a === void 0 ? void 0 : _a.data) === null || _b === void 0 ? void 0 : _b.message) || error.message;
-            return new Error(`Rooguys API Error: ${message}`);
+            return new Error(message);
         }
         return error;
     }

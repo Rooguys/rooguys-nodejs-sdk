@@ -14,7 +14,8 @@ exports.arbitraries = {
     // Event name: 1-100 characters
     eventName: () => fast_check_1.default.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
     // Properties: any JSON-serializable object
-    properties: () => fast_check_1.default.dictionary(fast_check_1.default.string({ minLength: 1, maxLength: 50 }), fast_check_1.default.oneof(fast_check_1.default.string(), fast_check_1.default.integer(), fast_check_1.default.double(), fast_check_1.default.boolean(), fast_check_1.default.constant(null))),
+    properties: () => fast_check_1.default.dictionary(fast_check_1.default.string({ minLength: 1, maxLength: 50 }), fast_check_1.default.oneof(fast_check_1.default.string(), fast_check_1.default.integer(), fast_check_1.default.double().filter(n => Number.isFinite(n)), // Exclude Infinity and NaN
+    fast_check_1.default.boolean(), fast_check_1.default.constant(null))),
     // Timeframe: one of the valid values
     timeframe: () => fast_check_1.default.constantFrom('all-time', 'weekly', 'monthly'),
     // Pagination parameters
