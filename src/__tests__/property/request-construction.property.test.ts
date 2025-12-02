@@ -1,7 +1,6 @@
 /**
  * Property-Based Test: HTTP Request Construction
  * Feature: sdk-testing-enhancement, Property 1: HTTP Request Construction
- * Validates: Requirements 1.1, 3.1
  * 
  * Tests that any valid SDK method call constructs correct HTTP request
  * with proper method, URL, headers, and body structure.
