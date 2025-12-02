@@ -216,7 +216,7 @@ describe('Events Resource', () => {
         mockSuccessResponse(mockResponses.trackEventResponse)
       );
 
-      await client.events.track('feature_toggled', 'user_123', {
+      await client.events.track('feature-toggled', 'user_123', {
         feature_name: 'dark_mode',
         enabled: true,
       });
@@ -238,7 +238,7 @@ describe('Events Resource', () => {
         mockSuccessResponse(mockResponses.trackEventResponse)
       );
 
-      await client.events.track('score_updated', 'user_123', {
+      await client.events.track('score-updated', 'user_123', {
         score: 1500,
         multiplier: 1.5,
         rank: 42,
@@ -262,7 +262,7 @@ describe('Events Resource', () => {
         mockSuccessResponse(mockResponses.trackEventResponse)
       );
 
-      await client.events.track('form_submitted', 'user_123', {
+      await client.events.track('form-submitted', 'user_123', {
         name: 'John Doe',
         comment: '',
       });
