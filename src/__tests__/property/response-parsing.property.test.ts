@@ -1,7 +1,6 @@
 /**
  * Property-Based Test: Response Parsing Preservation
  * Feature: sdk-testing-enhancement, Property 2: Response Parsing Preservation
- * Validates: Requirements 1.2, 7.1, 7.2, 7.3, 7.4
  * 
  * Tests that any successful response is parsed correctly and data structure
  * is preserved including nested objects, arrays, and null values.
