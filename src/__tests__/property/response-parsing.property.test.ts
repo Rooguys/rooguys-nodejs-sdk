@@ -1,6 +1,7 @@
 /**
- * Property-Based Test: Response Parsing Preservation
- * Feature: sdk-testing-enhancement, Property 2: Response Parsing Preservation
+ * Property-Based Test: Response Parsing Round-Trip
+ * Task 7.2: Property test for response parsing
+ * Validates: Requirements 2.1, 2.3, 2.4, 2.5
  * 
  * Tests that any successful response is parsed correctly and data structure
  * is preserved including nested objects, arrays, and null values.
@@ -8,19 +9,21 @@
 
 import fc from 'fast-check';
 import { Rooguys } from '../../index';
-import { createMockAxiosInstance } from '../utils/mockClient';
-import axios from 'axios';
+import { HttpClient } from '../../http-client';
+import {
+  createMockRooguysClient,
+  mockAxiosResponse,
+  MockAxiosInstance,
+} from '../utils/mockClient';
 
-// Mock axios
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
-
-describe('Property: Response Parsing Preservation', () => {
-  let mockClient: any;
+describe('Property: Response Parsing Round-Trip', () => {
+  let client: Rooguys;
+  let mockAxios: MockAxiosInstance;
 
   beforeEach(() => {
-    mockClient = createMockAxiosInstance();
-    mockedAxios.create.mockReturnValue(mockClient);
+    const mock = createMockRooguysClient();
+    client = mock.client;
+    mockAxios = mock.mockAxios;
   });
 
   afterEach(() => {
@@ -30,7 +33,6 @@ describe('Property: Response Parsing Preservation', () => {
   it('should preserve nested object structures in responses', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 10, maxLength: 100 }),
         fc.string({ minLength: 1, maxLength: 255 }),
         fc.record({
           user_id: fc.string(),
@@ -47,16 +49,16 @@ describe('Property: Response Parsing Preservation', () => {
           }), { nil: null }),
           metrics: fc.dictionary(fc.string(), fc.integer()),
         }),
-        async (apiKey, userId, responseData) => {
+        async (userId, responseData) => {
           // Arrange
-          mockClient.get.mockResolvedValue({ data: responseData });
-          const sdk = new Rooguys(apiKey);
+          mockAxios.request.mockResolvedValue(mockAxiosResponse(responseData));
 
           // Act
-          const result = await sdk.users.get(userId);
+          const result = await client.users.get(userId);
 
-          // Assert
-          expect(result).toEqual(responseData);
+          // Assert - SDK preserves the response structure
+          expect(result.user_id).toEqual(responseData.user_id);
+          expect(result.points).toEqual(responseData.points);
           expect(result.level).toEqual(responseData.level);
           expect(result.next_level).toEqual(responseData.next_level);
           expect(result.metrics).toEqual(responseData.metrics);
@@ -69,62 +71,63 @@ describe('Property: Response Parsing Preservation', () => {
   it('should preserve arrays in responses', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 10, maxLength: 100 }),
         fc.array(fc.string({ minLength: 1, maxLength: 255 }), { minLength: 1, maxLength: 10 }),
         fc.array(fc.record({
           user_id: fc.string(),
           points: fc.integer(),
         }), { minLength: 0, maxLength: 20 }),
-        async (apiKey, userIds, usersData) => {
+        async (userIds, usersData) => {
           // Arrange
           const responseData = { users: usersData };
-          mockClient.post.mockResolvedValue({ data: responseData });
-          const sdk = new Rooguys(apiKey);
+          mockAxios.request.mockResolvedValue(mockAxiosResponse(responseData));
 
           // Act
-          const result = await sdk.users.getBulk(userIds);
+          const result = await client.users.getBulk(userIds);
 
           // Assert
-          expect(result).toEqual(responseData);
           expect(Array.isArray(result.users)).toBe(true);
           expect(result.users).toHaveLength(usersData.length);
-          expect(result.users).toEqual(usersData);
+          result.users.forEach((user, index) => {
+            expect(user.user_id).toEqual(usersData[index].user_id);
+            expect(user.points).toEqual(usersData[index].points);
+          });
         }
       ),
       { numRuns: 100 }
     );
   });
 
-  it('should preserve null values in responses', async () => {
+  it('should preserve null values in aha score responses', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 10, maxLength: 100 }),
         fc.string({ minLength: 1, maxLength: 255 }),
         fc.record({
           user_id: fc.string(),
+          current_score: fc.integer({ min: 0, max: 100 }),
           declarative_score: fc.option(fc.integer({ min: 1, max: 5 }), { nil: null }),
           inferred_score: fc.option(fc.integer({ min: 0, max: 100 }), { nil: null }),
+          status: fc.constantFrom('not_started', 'progressing', 'activated'),
           history: fc.record({
             initial: fc.option(fc.integer(), { nil: null }),
             initial_date: fc.option(fc.string(), { nil: null }),
             previous: fc.option(fc.integer(), { nil: null }),
           }),
         }),
-        async (apiKey, userId, responseData) => {
-          // Arrange
-          mockClient.get.mockResolvedValue({ data: responseData });
-          const sdk = new Rooguys(apiKey);
+        async (userId, ahaData) => {
+          // Arrange - mock the wrapped response { success: true, data: {...} }
+          const responseData = { success: true, data: ahaData };
+          mockAxios.request.mockResolvedValue(mockAxiosResponse(responseData));
 
           // Act
-          const result = await sdk.aha.getUserScore(userId);
+          const result = await client.aha.getUserScore(userId);
 
-          // Assert
-          expect(result).toEqual(responseData);
-          expect((result as any).declarative_score).toBe(responseData.declarative_score);
-          expect((result as any).inferred_score).toBe(responseData.inferred_score);
-          expect((result as any).history.initial).toBe(responseData.history.initial);
-          expect((result as any).history.initial_date).toBe(responseData.history.initial_date);
-          expect((result as any).history.previous).toBe(responseData.history.previous);
+          // Assert - SDK unwraps { success: true, data: {...} } to just the data part
+          const data = result as any;
+          expect(data.declarative_score).toBe(ahaData.declarative_score);
+          expect(data.inferred_score).toBe(ahaData.inferred_score);
+          expect(data.history.initial).toBe(ahaData.history.initial);
+          expect(data.history.initial_date).toBe(ahaData.history.initial_date);
+          expect(data.history.previous).toBe(ahaData.history.previous);
         }
       ),
       { numRuns: 100 }
@@ -134,9 +137,8 @@ describe('Property: Response Parsing Preservation', () => {
   it('should handle empty objects and arrays', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 10, maxLength: 100 }),
         fc.constantFrom('all-time', 'weekly', 'monthly'),
-        async (apiKey, timeframe) => {
+        async (timeframe) => {
           // Arrange
           const responseData = {
             timeframe,
@@ -145,53 +147,102 @@ describe('Property: Response Parsing Preservation', () => {
             total: 0,
             rankings: [],
           };
-          mockClient.get.mockResolvedValue({ data: responseData });
-          const sdk = new Rooguys(apiKey);
+          mockAxios.request.mockResolvedValue(mockAxiosResponse(responseData));
 
           // Act
-          const result = await sdk.leaderboards.getGlobal(timeframe as any);
+          const result = await client.leaderboards.getGlobal(timeframe as any);
 
           // Assert
-          expect(result).toEqual(responseData);
           expect(Array.isArray(result.rankings)).toBe(true);
           expect(result.rankings).toHaveLength(0);
+          expect(result.timeframe).toBe(timeframe);
         }
       ),
       { numRuns: 100 }
     );
   });
 
-  it('should preserve complex nested structures', async () => {
+  it('should preserve complex nested structures with cache metadata', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.string({ minLength: 10, maxLength: 100 }),
         fc.record({
-          success: fc.boolean(),
-          data: fc.record({
+          timeframe: fc.constantFrom('all-time', 'weekly', 'monthly'),
+          page: fc.integer({ min: 1, max: 100 }),
+          limit: fc.integer({ min: 1, max: 100 }),
+          total: fc.integer({ min: 0, max: 10000 }),
+          rankings: fc.array(fc.record({
+            rank: fc.integer({ min: 1, max: 1000 }),
             user_id: fc.string(),
-            current_score: fc.integer({ min: 0, max: 100 }),
-            declarative_score: fc.option(fc.integer({ min: 1, max: 5 }), { nil: null }),
-            inferred_score: fc.option(fc.integer({ min: 0, max: 100 }), { nil: null }),
-            status: fc.constantFrom('not_started', 'progressing', 'activated'),
-            history: fc.record({
-              initial: fc.option(fc.integer(), { nil: null }),
-              initial_date: fc.option(fc.string(), { nil: null }),
-              previous: fc.option(fc.integer(), { nil: null }),
-            }),
-          }),
+            points: fc.integer({ min: 0, max: 100000 }),
+            percentile: fc.option(fc.float({ min: 0, max: 100 }), { nil: null }),
+          }), { minLength: 0, maxLength: 10 }),
+          cache_metadata: fc.option(fc.record({
+            cached_at: fc.string(),
+            ttl: fc.integer({ min: 0, max: 3600 }),
+          }), { nil: undefined }),
         }),
-        async (apiKey, responseData) => {
+        async (responseData) => {
           // Arrange
-          mockClient.get.mockResolvedValue({ data: responseData });
-          const sdk = new Rooguys(apiKey);
+          mockAxios.request.mockResolvedValue(mockAxiosResponse(responseData));
 
           // Act
-          const result = await sdk.aha.getUserScore('test-user');
+          const result = await client.leaderboards.getGlobal();
 
           // Assert
-          expect(result).toEqual(responseData);
-          expect(result.data).toEqual(responseData.data);
-          expect(result.data.history).toEqual(responseData.data.history);
+          expect(result.timeframe).toBe(responseData.timeframe);
+          expect(result.page).toBe(responseData.page);
+          expect(result.limit).toBe(responseData.limit);
+          expect(result.total).toBe(responseData.total);
+          expect(result.rankings).toHaveLength(responseData.rankings.length);
+          
+          // Verify each ranking entry
+          result.rankings.forEach((entry, index) => {
+            expect(entry.rank).toBe(responseData.rankings[index].rank);
+            expect(entry.user_id).toBe(responseData.rankings[index].user_id);
+            expect(entry.points).toBe(responseData.rankings[index].points);
+          });
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+
+  it('should preserve badge list structures', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.record({
+          badges: fc.array(fc.record({
+            id: fc.string(),
+            name: fc.string(),
+            description: fc.option(fc.string(), { nil: null }),
+            icon_url: fc.option(fc.string(), { nil: null }),
+            is_active: fc.boolean(),
+          }), { minLength: 0, maxLength: 10 }),
+          pagination: fc.record({
+            page: fc.integer({ min: 1, max: 100 }),
+            limit: fc.integer({ min: 1, max: 100 }),
+            total: fc.integer({ min: 0, max: 1000 }),
+            totalPages: fc.integer({ min: 0, max: 100 }),
+          }),
+        }),
+        async (responseData) => {
+          // Arrange
+          mockAxios.request.mockResolvedValue(mockAxiosResponse(responseData));
+
+          // Act
+          const result = await client.badges.list();
+
+          // Assert
+          expect(result.badges).toHaveLength(responseData.badges.length);
+          expect(result.pagination).toEqual(responseData.pagination);
+          
+          result.badges.forEach((badge, index) => {
+            expect(badge.id).toBe(responseData.badges[index].id);
+            expect(badge.name).toBe(responseData.badges[index].name);
+            expect(badge.description).toBe(responseData.badges[index].description);
+            expect(badge.icon_url).toBe(responseData.badges[index].icon_url);
+            expect(badge.is_active).toBe(responseData.badges[index].is_active);
+          });
         }
       ),
       { numRuns: 100 }

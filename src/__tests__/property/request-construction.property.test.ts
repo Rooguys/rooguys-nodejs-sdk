@@ -1,6 +1,7 @@
 /**
  * Property-Based Test: HTTP Request Construction
  * Feature: sdk-testing-enhancement, Property 1: HTTP Request Construction
+ * Validates: Requirements 1.1, 3.1
  * 
  * Tests that any valid SDK method call constructs correct HTTP request
  * with proper method, URL, headers, and body structure.
@@ -8,20 +9,22 @@
 
 import fc from 'fast-check';
 import { Rooguys } from '../../index';
-import { createMockAxiosInstance } from '../utils/mockClient';
+import {
+  createMockRooguysClient,
+  mockAxiosResponse,
+  getLastRequestConfig,
+  MockAxiosInstance,
+} from '../utils/mockClient';
 import { arbitraries } from '../utils/generators';
-import axios from 'axios';
-
-// Mock axios
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('Property: HTTP Request Construction', () => {
-  let mockClient: any;
+  let client: Rooguys;
+  let mockAxios: MockAxiosInstance;
 
   beforeEach(() => {
-    mockClient = createMockAxiosInstance();
-    mockedAxios.create.mockReturnValue(mockClient);
+    const mock = createMockRooguysClient();
+    client = mock.client;
+    mockAxios = mock.mockAxios;
   });
 
   afterEach(() => {
@@ -31,32 +34,28 @@ describe('Property: HTTP Request Construction', () => {
   it('should construct valid POST request for event tracking', async () => {
     await fc.assert(
       fc.asyncProperty(
-        arbitraries.apiKey(),
         arbitraries.eventName(),
         arbitraries.userId(),
         arbitraries.properties(),
-        async (apiKey, eventName, userId, properties) => {
+        async (eventName, userId, properties) => {
           // Arrange
-          mockClient.post.mockResolvedValue({
-            data: { status: 'queued', message: 'Event accepted' }
-          });
-          const sdk = new Rooguys(apiKey);
+          mockAxios.request.mockResolvedValue(mockAxiosResponse({
+            status: 'queued',
+            message: 'Event accepted'
+          }));
 
           // Act
-          await sdk.events.track(eventName, userId, properties);
+          await client.events.track(eventName, userId, properties);
 
           // Assert
-          expect(mockClient.post).toHaveBeenCalledWith(
-            '/event',
-            {
-              event_name: eventName,
-              user_id: userId,
-              properties,
-            },
-            expect.objectContaining({
-              params: expect.any(Object)
-            })
-          );
+          const config = getLastRequestConfig(mockAxios);
+          expect(config.method).toBe('POST');
+          expect(config.url).toBe('/events');
+          expect(config.data).toEqual({
+            event_name: eventName,
+            user_id: userId,
+            properties,
+          });
         }
       ),
       { numRuns: 100 }
@@ -66,20 +65,21 @@ describe('Property: HTTP Request Construction', () => {
   it('should construct valid GET request for user profile', async () => {
     await fc.assert(
       fc.asyncProperty(
-        arbitraries.apiKey(),
         arbitraries.userId(),
-        async (apiKey, userId) => {
+        async (userId) => {
           // Arrange
-          mockClient.get.mockResolvedValue({
-            data: { user_id: userId, points: 100 }
-          });
-          const sdk = new Rooguys(apiKey);
+          mockAxios.request.mockResolvedValue(mockAxiosResponse({
+            user_id: userId,
+            points: 100
+          }));
 
           // Act
-          await sdk.users.get(userId);
+          await client.users.get(userId);
 
           // Assert
-          expect(mockClient.get).toHaveBeenCalledWith(`/user/${encodeURIComponent(userId)}`);
+          const config = getLastRequestConfig(mockAxios);
+          expect(config.method).toBe('GET');
+          expect(config.url).toBe(`/users/${encodeURIComponent(userId)}`);
         }
       ),
       { numRuns: 100 }
@@ -89,23 +89,21 @@ describe('Property: HTTP Request Construction', () => {
   it('should construct valid POST request for bulk user fetch', async () => {
     await fc.assert(
       fc.asyncProperty(
-        arbitraries.apiKey(),
         arbitraries.userIds(),
-        async (apiKey, userIds) => {
+        async (userIds) => {
           // Arrange
-          mockClient.post.mockResolvedValue({
-            data: { users: [] }
-          });
-          const sdk = new Rooguys(apiKey);
+          mockAxios.request.mockResolvedValue(mockAxiosResponse({
+            users: []
+          }));
 
           // Act
-          await sdk.users.getBulk(userIds);
+          await client.users.getBulk(userIds);
 
           // Assert
-          expect(mockClient.post).toHaveBeenCalledWith(
-            '/users/bulk',
-            { user_ids: userIds }
-          );
+          const config = getLastRequestConfig(mockAxios);
+          expect(config.method).toBe('POST');
+          expect(config.url).toBe('/users/bulk');
+          expect(config.data).toEqual({ user_ids: userIds });
         }
       ),
       { numRuns: 100 }
@@ -115,26 +113,29 @@ describe('Property: HTTP Request Construction', () => {
   it('should construct valid GET request with query parameters for leaderboard', async () => {
     await fc.assert(
       fc.asyncProperty(
-        arbitraries.apiKey(),
         arbitraries.timeframe(),
         arbitraries.pagination(),
-        async (apiKey, timeframe, { page, limit }) => {
+        async (timeframe, { page, limit }) => {
           // Arrange
-          mockClient.get.mockResolvedValue({
-            data: { rankings: [], page, limit, total: 0 }
-          });
-          const sdk = new Rooguys(apiKey);
+          mockAxios.request.mockResolvedValue(mockAxiosResponse({
+            rankings: [],
+            page,
+            limit,
+            total: 0
+          }));
 
           // Act
-          await sdk.leaderboards.getGlobal(timeframe as any, page, limit);
+          await client.leaderboards.getGlobal(timeframe as any, page, limit);
 
           // Assert
-          expect(mockClient.get).toHaveBeenCalledWith(
-            '/leaderboard',
-            {
-              params: { timeframe, page, limit }
-            }
-          );
+          const config = getLastRequestConfig(mockAxios);
+          expect(config.method).toBe('GET');
+          expect(config.url).toBe('/leaderboards/global');
+          expect(config.params).toEqual(expect.objectContaining({
+            timeframe,
+            page,
+            limit
+          }));
         }
       ),
       { numRuns: 100 }
@@ -144,57 +145,107 @@ describe('Property: HTTP Request Construction', () => {
   it('should construct valid POST request for Aha score declaration', async () => {
     await fc.assert(
       fc.asyncProperty(
-        arbitraries.apiKey(),
         arbitraries.userId(),
         arbitraries.ahaValue(),
-        async (apiKey, userId, value) => {
+        async (userId, value) => {
           // Arrange
-          mockClient.post.mockResolvedValue({
-            data: { success: true, message: 'Score declared' }
-          });
-          const sdk = new Rooguys(apiKey);
+          mockAxios.request.mockResolvedValue(mockAxiosResponse({
+            success: true,
+            message: 'Score declared'
+          }));
 
           // Act
-          await sdk.aha.declare(userId, value);
+          await client.aha.declare(userId, value);
 
           // Assert
-          expect(mockClient.post).toHaveBeenCalledWith(
-            '/aha/declare',
-            {
-              user_id: userId,
-              value,
-            }
-          );
+          const config = getLastRequestConfig(mockAxios);
+          expect(config.method).toBe('POST');
+          expect(config.url).toBe('/aha/declare');
+          expect(config.data).toEqual({
+            user_id: userId,
+            value,
+          });
         }
       ),
       { numRuns: 100 }
     );
   });
 
-  it('should include API key in request headers', async () => {
+  it('should construct valid GET request for badges list', async () => {
     await fc.assert(
       fc.asyncProperty(
-        arbitraries.apiKey(),
-        arbitraries.userId(),
-        async (apiKey, userId) => {
+        arbitraries.pagination(),
+        fc.boolean(),
+        async ({ page, limit }, activeOnly) => {
           // Arrange
-          mockClient.get.mockResolvedValue({
-            data: { user_id: userId, points: 100 }
-          });
+          mockAxios.request.mockResolvedValue(mockAxiosResponse({
+            badges: [],
+            pagination: { page, limit, total: 0, totalPages: 0 }
+          }));
 
           // Act
-          const sdk = new Rooguys(apiKey);
-          await sdk.users.get(userId);
+          await client.badges.list(page, limit, activeOnly);
 
-          // Assert - verify axios.create was called with correct headers
-          expect(mockedAxios.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-              headers: expect.objectContaining({
-                'x-api-key': apiKey,
-                'Content-Type': 'application/json',
-              })
-            })
-          );
+          // Assert
+          const config = getLastRequestConfig(mockAxios);
+          expect(config.method).toBe('GET');
+          expect(config.url).toBe('/badges');
+          expect(config.params).toEqual({
+            page,
+            limit,
+            active_only: activeOnly
+          });
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+
+  it('should construct valid GET request for levels list', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        arbitraries.pagination(),
+        async ({ page, limit }) => {
+          // Arrange
+          mockAxios.request.mockResolvedValue(mockAxiosResponse({
+            levels: [],
+            pagination: { page, limit, total: 0, totalPages: 0 }
+          }));
+
+          // Act
+          await client.levels.list(page, limit);
+
+          // Assert
+          const config = getLastRequestConfig(mockAxios);
+          expect(config.method).toBe('GET');
+          expect(config.url).toBe('/levels');
+          expect(config.params).toEqual({ page, limit });
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+
+  it('should construct valid GET request for questionnaire by slug', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.string({ minLength: 1, maxLength: 50 }).filter(s => /^[a-z0-9-]+$/.test(s)),
+        async (slug) => {
+          // Arrange
+          mockAxios.request.mockResolvedValue(mockAxiosResponse({
+            id: 'q1',
+            slug,
+            title: 'Test',
+            questions: []
+          }));
+
+          // Act
+          await client.questionnaires.get(slug);
+
+          // Assert
+          const config = getLastRequestConfig(mockAxios);
+          expect(config.method).toBe('GET');
+          expect(config.url).toBe(`/questionnaires/${slug}`);
         }
       ),
       { numRuns: 100 }

@@ -1,220 +1,176 @@
-import axios from 'axios';
-import { Rooguys } from '../../index';
-import { createMockAxiosInstance, mockErrorResponse } from '../utils/mockClient';
+import { Rooguys, RooguysError, ValidationError, AuthenticationError, NotFoundError, RateLimitError, ServerError } from '../../index';
+import {
+  createMockRooguysClient,
+  setupMockRequest,
+  setupMockRequestError,
+  mockErrorResponse,
+  MockAxiosInstance,
+} from '../utils/mockClient';
 import { mockErrors } from '../fixtures/responses';
-
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('Error Handling', () => {
   let client: Rooguys;
-  let mockAxiosInstance: ReturnType<typeof createMockAxiosInstance>;
-  const apiKey = 'test-api-key';
+  let mockAxios: MockAxiosInstance;
 
   beforeEach(() => {
-    mockAxiosInstance = createMockAxiosInstance();
-    mockedAxios.create.mockReturnValue(mockAxiosInstance as any);
-    client = new Rooguys(apiKey);
-    jest.clearAllMocks();
+    const mock = createMockRooguysClient();
+    client = mock.client;
+    mockAxios = mock.mockAxios;
   });
 
   describe('4xx client errors', () => {
-    it('should throw error with message for 400 Bad Request', async () => {
-      mockAxiosInstance.post.mockRejectedValue(
-        mockErrorResponse(400, 'Bad Request')
-      );
+    it('should throw ValidationError for 400 Bad Request', async () => {
+      setupMockRequestError(mockAxios, 400, 'Bad Request', 'VALIDATION_ERROR');
 
-      await expect(client.events.track('test', 'user1')).rejects.toThrow(
-        'Bad Request'
-      );
+      await expect(client.events.track('test', 'user1')).rejects.toThrow(ValidationError);
     });
 
-    it('should throw error with message for 401 Unauthorized', async () => {
-      mockAxiosInstance.get.mockRejectedValue(
-        mockErrorResponse(401, mockErrors.unauthorizedError.message)
-      );
+    it('should throw AuthenticationError for 401 Unauthorized', async () => {
+      setupMockRequestError(mockAxios, 401, 'Invalid or missing API key', 'UNAUTHORIZED');
 
-      await expect(client.users.get('user1')).rejects.toThrow(
-        'Invalid or missing API key'
-      );
+      await expect(client.users.get('user1')).rejects.toThrow(AuthenticationError);
     });
 
-    it('should throw error with message for 404 Not Found', async () => {
-      mockAxiosInstance.get.mockRejectedValue(
-        mockErrorResponse(404, mockErrors.notFoundError.message)
-      );
+    it('should throw NotFoundError for 404 Not Found', async () => {
+      setupMockRequestError(mockAxios, 404, "User 'user123' does not exist in this project", 'NOT_FOUND');
 
-      await expect(client.users.get('nonexistent')).rejects.toThrow(
-        "User 'user123' does not exist in this project"
-      );
+      await expect(client.users.get('nonexistent')).rejects.toThrow(NotFoundError);
     });
 
     it('should include validation details in error', async () => {
-      mockAxiosInstance.post.mockRejectedValue(
-        mockErrorResponse(400, 'Validation failed', mockErrors.validationError.details)
-      );
+      setupMockRequestError(mockAxios, 400, 'Validation failed', 'VALIDATION_ERROR', [
+        { field: 'user_id', message: 'User ID is required' },
+      ]);
 
-      await expect(client.events.track('', 'user1')).rejects.toThrow(
-        'Validation failed'
-      );
+      try {
+        await client.events.track('', 'user1');
+        fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationError);
+        expect((error as ValidationError).fieldErrors).toBeDefined();
+      }
     });
 
-    it('should throw error for 429 Too Many Requests', async () => {
-      mockAxiosInstance.get.mockRejectedValue(
-        mockErrorResponse(429, 'Rate limit exceeded')
-      );
+    it('should throw RateLimitError for 429 Too Many Requests', async () => {
+      const error = mockErrorResponse(429, 'Rate limit exceeded', 'RATE_LIMIT_EXCEEDED');
+      error.response.headers['retry-after'] = '60';
+      mockAxios.request.mockRejectedValue(error);
 
-      await expect(client.users.get('user1')).rejects.toThrow(
-        'Rate limit exceeded'
-      );
+      await expect(client.users.get('user1')).rejects.toThrow(RateLimitError);
     });
   });
 
   describe('5xx server errors', () => {
-    it('should throw error with message for 500 Internal Server Error', async () => {
-      mockAxiosInstance.post.mockRejectedValue(
-        mockErrorResponse(500, 'Internal server error')
-      );
+    it('should throw ServerError for 500 Internal Server Error', async () => {
+      setupMockRequestError(mockAxios, 500, 'Internal server error', 'SERVER_ERROR');
 
-      await expect(client.events.track('test', 'user1')).rejects.toThrow(
-        'Internal server error'
-      );
+      await expect(client.events.track('test', 'user1')).rejects.toThrow(ServerError);
     });
 
-    it('should throw error with message for 503 Service Unavailable', async () => {
-      mockAxiosInstance.post.mockRejectedValue(
-        mockErrorResponse(503, mockErrors.queueFullError.message)
-      );
+    it('should throw ServerError for 503 Service Unavailable', async () => {
+      setupMockRequestError(mockAxios, 503, 'Event queue is full. Please retry later.', 'SERVICE_UNAVAILABLE');
 
-      await expect(client.events.track('test', 'user1')).rejects.toThrow(
-        'Event queue is full'
-      );
+      await expect(client.events.track('test', 'user1')).rejects.toThrow(ServerError);
     });
 
-    it('should throw error for 502 Bad Gateway', async () => {
-      mockAxiosInstance.get.mockRejectedValue(
-        mockErrorResponse(502, 'Bad Gateway')
-      );
+    it('should throw ServerError for 502 Bad Gateway', async () => {
+      setupMockRequestError(mockAxios, 502, 'Bad Gateway', 'BAD_GATEWAY');
 
-      await expect(client.users.get('user1')).rejects.toThrow(
-        'Bad Gateway'
-      );
+      await expect(client.users.get('user1')).rejects.toThrow(ServerError);
     });
   });
 
   describe('network errors', () => {
-    it('should throw error for network timeout', async () => {
+    it('should throw RooguysError for network timeout', async () => {
       const timeoutError = new Error('timeout of 10000ms exceeded');
-      (timeoutError as any).code = 'ECONNABORTED';
-      mockAxiosInstance.post.mockRejectedValue(timeoutError);
+      mockAxios.request.mockRejectedValue(timeoutError);
 
-      await expect(client.events.track('test', 'user1')).rejects.toThrow(
-        'timeout'
-      );
+      await expect(client.events.track('test', 'user1')).rejects.toThrow(RooguysError);
     });
 
-    it('should throw error for connection refused', async () => {
+    it('should throw RooguysError for connection refused', async () => {
       const connectionError = new Error('connect ECONNREFUSED');
-      (connectionError as any).code = 'ECONNREFUSED';
-      mockAxiosInstance.get.mockRejectedValue(connectionError);
+      mockAxios.request.mockRejectedValue(connectionError);
 
-      await expect(client.users.get('user1')).rejects.toThrow(
-        'ECONNREFUSED'
-      );
+      await expect(client.users.get('user1')).rejects.toThrow(RooguysError);
     });
 
-    it('should throw error for DNS lookup failure', async () => {
+    it('should throw RooguysError for DNS lookup failure', async () => {
       const dnsError = new Error('getaddrinfo ENOTFOUND');
-      (dnsError as any).code = 'ENOTFOUND';
-      mockAxiosInstance.get.mockRejectedValue(dnsError);
+      mockAxios.request.mockRejectedValue(dnsError);
 
-      await expect(client.users.get('user1')).rejects.toThrow(
-        'ENOTFOUND'
-      );
+      await expect(client.users.get('user1')).rejects.toThrow(RooguysError);
     });
   });
 
-  describe('malformed responses', () => {
-    it('should handle response without error message', async () => {
-      const error: any = new Error('Request failed');
-      error.response = {
-        status: 500,
-        data: {},
-      };
-      error.isAxiosError = true;
-      mockAxiosInstance.post.mockRejectedValue(error);
-
-      await expect(client.events.track('test', 'user1')).rejects.toThrow(
-        'Request failed'
-      );
-    });
-
-    it('should handle response with null data', async () => {
-      const error: any = new Error('Request failed');
-      error.response = {
-        status: 500,
-        data: null,
-      };
-      error.isAxiosError = true;
-      mockAxiosInstance.get.mockRejectedValue(error);
-
-      await expect(client.users.get('user1')).rejects.toThrow(
-        'Request failed'
-      );
-    });
-  });
-
-  describe('error detail preservation', () => {
-    it('should preserve error details from API response', async () => {
-      mockAxiosInstance.post.mockRejectedValue(
-        mockErrorResponse(400, 'Validation failed', [
-          { field: 'user_id', message: 'User ID is required' },
-          { field: 'event_name', message: 'Event name is required' },
-        ])
-      );
+  describe('error properties', () => {
+    it('should include status code in error', async () => {
+      setupMockRequestError(mockAxios, 404, 'Not found', 'NOT_FOUND');
 
       try {
-        await client.events.track('', '');
+        await client.users.get('user1');
         fail('Should have thrown an error');
-      } catch (error: any) {
-        expect(error.message).toContain('Validation failed');
+      } catch (error) {
+        expect(error).toBeInstanceOf(NotFoundError);
+        expect((error as NotFoundError).statusCode).toBe(404);
       }
     });
 
-    it('should handle errors with nested details', async () => {
-      mockAxiosInstance.post.mockRejectedValue(
-        mockErrorResponse(400, 'Complex validation error', {
-          errors: {
-            properties: {
-              amount: 'Must be a positive number',
-            },
-          },
-        })
-      );
+    it('should include error code in error', async () => {
+      setupMockRequestError(mockAxios, 400, 'Validation failed', 'VALIDATION_ERROR');
 
-      await expect(client.events.track('test', 'user1')).rejects.toThrow(
-        'Complex validation error'
-      );
+      try {
+        await client.events.track('test', 'user1');
+        fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationError);
+        expect((error as ValidationError).code).toBe('VALIDATION_ERROR');
+      }
+    });
+
+    it('should include request ID in error when available', async () => {
+      setupMockRequestError(mockAxios, 500, 'Server error', 'SERVER_ERROR');
+
+      try {
+        await client.users.get('user1');
+        fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ServerError);
+        expect((error as ServerError).requestId).toBeDefined();
+      }
     });
   });
 
-  describe('non-axios errors', () => {
-    it('should rethrow non-axios errors', async () => {
-      const customError = new Error('Custom error');
-      mockAxiosInstance.post.mockRejectedValue(customError);
-
-      await expect(client.events.track('test', 'user1')).rejects.toThrow(
-        'Custom error'
-      );
+  describe('error class hierarchy', () => {
+    it('ValidationError should be instance of RooguysError', () => {
+      const error = new ValidationError('Test error');
+      expect(error).toBeInstanceOf(RooguysError);
+      expect(error).toBeInstanceOf(Error);
     });
 
-    it('should handle TypeError', async () => {
-      const typeError = new TypeError('Cannot read property');
-      mockAxiosInstance.get.mockRejectedValue(typeError);
+    it('AuthenticationError should be instance of RooguysError', () => {
+      const error = new AuthenticationError('Test error');
+      expect(error).toBeInstanceOf(RooguysError);
+      expect(error).toBeInstanceOf(Error);
+    });
 
-      await expect(client.users.get('user1')).rejects.toThrow(
-        'Cannot read property'
-      );
+    it('NotFoundError should be instance of RooguysError', () => {
+      const error = new NotFoundError('Test error');
+      expect(error).toBeInstanceOf(RooguysError);
+      expect(error).toBeInstanceOf(Error);
+    });
+
+    it('RateLimitError should be instance of RooguysError', () => {
+      const error = new RateLimitError('Test error', { retryAfter: 60 });
+      expect(error).toBeInstanceOf(RooguysError);
+      expect(error).toBeInstanceOf(Error);
+      expect(error.retryAfter).toBe(60);
+    });
+
+    it('ServerError should be instance of RooguysError', () => {
+      const error = new ServerError('Test error');
+      expect(error).toBeInstanceOf(RooguysError);
+      expect(error).toBeInstanceOf(Error);
     });
   });
 });

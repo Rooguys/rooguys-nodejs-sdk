@@ -1,40 +1,39 @@
-import axios from 'axios';
 import { Rooguys } from '../../index';
-import { createMockAxiosInstance, mockSuccessResponse, mockErrorResponse } from '../utils/mockClient';
+import {
+  createMockRooguysClient,
+  setupMockRequest,
+  setupMockRequestError,
+  expectRequestWith,
+  MockAxiosInstance,
+} from '../utils/mockClient';
 import { mockResponses, mockErrors } from '../fixtures/responses';
-
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('Questionnaires Resource', () => {
   let client: Rooguys;
-  let mockAxiosInstance: ReturnType<typeof createMockAxiosInstance>;
-  const apiKey = 'test-api-key';
+  let mockAxios: MockAxiosInstance;
 
   beforeEach(() => {
-    mockAxiosInstance = createMockAxiosInstance();
-    mockedAxios.create.mockReturnValue(mockAxiosInstance as any);
-    client = new Rooguys(apiKey);
-    jest.clearAllMocks();
+    const mock = createMockRooguysClient();
+    client = mock.client;
+    mockAxios = mock.mockAxios;
   });
 
   describe('get', () => {
     it('should get questionnaire by slug', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.questionnaireResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.questionnaireResponse);
 
       const result = await client.questionnaires.get('user-persona');
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/questionnaire/user-persona');
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/questionnaires/user-persona',
+      });
       expect(result).toEqual(mockResponses.questionnaireResponse);
       expect(result.slug).toBe('user-persona');
     });
 
     it('should handle questionnaire with multiple questions', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.questionnaireResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.questionnaireResponse);
 
       const result = await client.questionnaires.get('user-persona');
 
@@ -43,9 +42,7 @@ describe('Questionnaires Resource', () => {
     });
 
     it('should handle questionnaire with answer options', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.questionnaireResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.questionnaireResponse);
 
       const result = await client.questionnaires.get('user-persona');
 
@@ -55,9 +52,7 @@ describe('Questionnaires Resource', () => {
     });
 
     it('should throw 404 error when questionnaire not found', async () => {
-      mockAxiosInstance.get.mockRejectedValue(
-        mockErrorResponse(404, 'Questionnaire not found')
-      );
+      setupMockRequestError(mockAxios, 404, 'Questionnaire not found');
 
       await expect(
         client.questionnaires.get('nonexistent-slug')
@@ -65,13 +60,14 @@ describe('Questionnaires Resource', () => {
     });
 
     it('should handle slug with special characters', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.questionnaireResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.questionnaireResponse);
 
       await client.questionnaires.get('user-persona-v2');
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/questionnaire/user-persona-v2');
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/questionnaires/user-persona-v2',
+      });
     });
 
     it('should handle inactive questionnaire', async () => {
@@ -79,7 +75,7 @@ describe('Questionnaires Resource', () => {
         ...mockResponses.questionnaireResponse,
         is_active: false,
       };
-      mockAxiosInstance.get.mockResolvedValue(mockSuccessResponse(inactiveQuestionnaire));
+      setupMockRequest(mockAxios, inactiveQuestionnaire);
 
       const result = await client.questionnaires.get('old-questionnaire');
 
@@ -89,21 +85,20 @@ describe('Questionnaires Resource', () => {
 
   describe('getActive', () => {
     it('should get active questionnaire', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.questionnaireResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.questionnaireResponse);
 
       const result = await client.questionnaires.getActive();
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/questionnaire/active');
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/questionnaires/active',
+      });
       expect(result).toEqual(mockResponses.questionnaireResponse);
       expect(result.is_active).toBe(true);
     });
 
     it('should throw 404 error when no active questionnaire', async () => {
-      mockAxiosInstance.get.mockRejectedValue(
-        mockErrorResponse(404, 'No active questionnaire found for this project')
-      );
+      setupMockRequestError(mockAxios, 404, 'No active questionnaire found for this project');
 
       await expect(client.questionnaires.getActive()).rejects.toThrow(
         'No active questionnaire found'
@@ -111,9 +106,7 @@ describe('Questionnaires Resource', () => {
     });
 
     it('should handle active questionnaire with all fields', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.questionnaireResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.questionnaireResponse);
 
       const result = await client.questionnaires.getActive();
 
@@ -126,9 +119,7 @@ describe('Questionnaires Resource', () => {
     });
 
     it('should handle server error', async () => {
-      mockAxiosInstance.get.mockRejectedValue(
-        mockErrorResponse(500, 'Internal server error')
-      );
+      setupMockRequestError(mockAxios, 500, 'Internal server error');
 
       await expect(client.questionnaires.getActive()).rejects.toThrow(
         'Internal server error'

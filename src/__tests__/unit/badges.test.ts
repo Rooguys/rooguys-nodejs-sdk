@@ -1,32 +1,32 @@
-import axios from 'axios';
 import { Rooguys } from '../../index';
-import { createMockAxiosInstance, mockSuccessResponse, mockErrorResponse } from '../utils/mockClient';
+import {
+  createMockRooguysClient,
+  setupMockRequest,
+  setupMockRequestError,
+  expectRequestWith,
+  MockAxiosInstance,
+} from '../utils/mockClient';
 import { mockResponses, mockErrors } from '../fixtures/responses';
-
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('Badges Resource', () => {
   let client: Rooguys;
-  let mockAxiosInstance: ReturnType<typeof createMockAxiosInstance>;
-  const apiKey = 'test-api-key';
+  let mockAxios: MockAxiosInstance;
 
   beforeEach(() => {
-    mockAxiosInstance = createMockAxiosInstance();
-    mockedAxios.create.mockReturnValue(mockAxiosInstance as any);
-    client = new Rooguys(apiKey);
-    jest.clearAllMocks();
+    const mock = createMockRooguysClient();
+    client = mock.client;
+    mockAxios = mock.mockAxios;
   });
 
   describe('list', () => {
     it('should list badges with default parameters', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.badgesListResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.badgesListResponse);
 
       const result = await client.badges.list();
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/badges', {
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/badges',
         params: { page: 1, limit: 50, active_only: false },
       });
       expect(result).toEqual(mockResponses.badgesListResponse);
@@ -34,25 +34,25 @@ describe('Badges Resource', () => {
     });
 
     it('should list badges with custom pagination', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.badgesListResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.badgesListResponse);
 
       await client.badges.list(2, 25);
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/badges', {
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/badges',
         params: { page: 2, limit: 25, active_only: false },
       });
     });
 
     it('should list only active badges', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.badgesListResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.badgesListResponse);
 
       await client.badges.list(1, 50, true);
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/badges', {
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/badges',
         params: { page: 1, limit: 50, active_only: true },
       });
     });
@@ -67,7 +67,7 @@ describe('Badges Resource', () => {
           totalPages: 0,
         },
       };
-      mockAxiosInstance.get.mockResolvedValue(mockSuccessResponse(emptyResponse));
+      setupMockRequest(mockAxios, emptyResponse);
 
       const result = await client.badges.list();
 
@@ -76,9 +76,7 @@ describe('Badges Resource', () => {
     });
 
     it('should throw error for invalid pagination', async () => {
-      mockAxiosInstance.get.mockRejectedValue(
-        mockErrorResponse(400, mockErrors.invalidPaginationError.message)
-      );
+      setupMockRequestError(mockAxios, 400, 'Limit must be between 1 and 100');
 
       await expect(client.badges.list(1, 150)).rejects.toThrow(
         'Limit must be between 1 and 100'
@@ -86,9 +84,7 @@ describe('Badges Resource', () => {
     });
 
     it('should handle badges with all fields', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.badgesListResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.badgesListResponse);
 
       const result = await client.badges.list();
 
@@ -102,9 +98,7 @@ describe('Badges Resource', () => {
     });
 
     it('should handle server error', async () => {
-      mockAxiosInstance.get.mockRejectedValue(
-        mockErrorResponse(500, 'Internal server error')
-      );
+      setupMockRequestError(mockAxios, 500, 'Internal server error');
 
       await expect(client.badges.list()).rejects.toThrow('Internal server error');
     });

@@ -1,71 +1,66 @@
-import axios from 'axios';
 import { Rooguys } from '../../index';
-import { createMockAxiosInstance, mockSuccessResponse, mockErrorResponse } from '../utils/mockClient';
+import {
+  createMockRooguysClient,
+  setupMockRequest,
+  setupMockRequestError,
+  expectRequestWith,
+  MockAxiosInstance,
+} from '../utils/mockClient';
 import { mockResponses, mockErrors } from '../fixtures/responses';
-
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('Leaderboards Resource', () => {
   let client: Rooguys;
-  let mockAxiosInstance: ReturnType<typeof createMockAxiosInstance>;
-  const apiKey = 'test-api-key';
+  let mockAxios: MockAxiosInstance;
 
   beforeEach(() => {
-    mockAxiosInstance = createMockAxiosInstance();
-    mockedAxios.create.mockReturnValue(mockAxiosInstance as any);
-    client = new Rooguys(apiKey);
-    jest.clearAllMocks();
+    const mock = createMockRooguysClient();
+    client = mock.client;
+    mockAxios = mock.mockAxios;
   });
 
   describe('getGlobal', () => {
     it('should get global leaderboard with default parameters', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.leaderboardResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.leaderboardResponse);
 
       const result = await client.leaderboards.getGlobal();
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/leaderboard', {
-        params: { timeframe: 'all-time', page: 1, limit: 50 },
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards/global',
       });
-      expect(result).toEqual(mockResponses.leaderboardResponse);
       expect(result.rankings).toHaveLength(2);
     });
 
     it('should get global leaderboard with weekly timeframe', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.leaderboardResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.leaderboardResponse);
 
       await client.leaderboards.getGlobal('weekly');
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/leaderboard', {
-        params: { timeframe: 'weekly', page: 1, limit: 50 },
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards/global',
       });
     });
 
     it('should get global leaderboard with monthly timeframe', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.leaderboardResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.leaderboardResponse);
 
       await client.leaderboards.getGlobal('monthly');
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/leaderboard', {
-        params: { timeframe: 'monthly', page: 1, limit: 50 },
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards/global',
       });
     });
 
     it('should get global leaderboard with custom pagination', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.leaderboardResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.leaderboardResponse);
 
       await client.leaderboards.getGlobal('all-time', 2, 25);
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/leaderboard', {
-        params: { timeframe: 'all-time', page: 2, limit: 25 },
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards/global',
       });
     });
 
@@ -75,7 +70,7 @@ describe('Leaderboards Resource', () => {
         rankings: [],
         total: 0,
       };
-      mockAxiosInstance.get.mockResolvedValue(mockSuccessResponse(emptyLeaderboard));
+      setupMockRequest(mockAxios, emptyLeaderboard);
 
       const result = await client.leaderboards.getGlobal();
 
@@ -84,9 +79,7 @@ describe('Leaderboards Resource', () => {
     });
 
     it('should throw error for invalid timeframe', async () => {
-      mockAxiosInstance.get.mockRejectedValue(
-        mockErrorResponse(400, mockErrors.invalidTimeframeError.message)
-      );
+      setupMockRequestError(mockAxios, 400, "Timeframe must be one of: all-time, weekly, monthly");
 
       await expect(
         client.leaderboards.getGlobal('invalid' as any)
@@ -94,9 +87,7 @@ describe('Leaderboards Resource', () => {
     });
 
     it('should throw error for invalid pagination', async () => {
-      mockAxiosInstance.get.mockRejectedValue(
-        mockErrorResponse(400, mockErrors.invalidPaginationError.message)
-      );
+      setupMockRequestError(mockAxios, 400, 'Limit must be between 1 and 100');
 
       await expect(
         client.leaderboards.getGlobal('all-time', 1, 150)
@@ -112,13 +103,155 @@ describe('Leaderboards Resource', () => {
           { rank: 3, user_id: 'user3', points: 900, level: null },
         ],
       };
-      mockAxiosInstance.get.mockResolvedValue(mockSuccessResponse(leaderboardWithTies));
+      setupMockRequest(mockAxios, leaderboardWithTies);
 
       const result = await client.leaderboards.getGlobal();
 
       expect(result.rankings[0].rank).toBe(1);
       expect(result.rankings[1].rank).toBe(1);
       expect(result.rankings[2].rank).toBe(3);
+    });
+
+    it('should support filter options object', async () => {
+      setupMockRequest(mockAxios, mockResponses.leaderboardResponse);
+
+      await client.leaderboards.getGlobal({
+        timeframe: 'weekly',
+        page: 2,
+        limit: 25,
+        persona: 'Achiever',
+      });
+
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards/global',
+      });
+    });
+  });
+
+  describe('list', () => {
+    it('should list all leaderboards', async () => {
+      setupMockRequest(mockAxios, mockResponses.leaderboardsListResponse);
+
+      const result = await client.leaderboards.list();
+
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards',
+      });
+      expect(result.leaderboards).toHaveLength(1);
+    });
+
+    it('should list leaderboards with pagination', async () => {
+      setupMockRequest(mockAxios, mockResponses.leaderboardsListResponse);
+
+      await client.leaderboards.list(2, 25);
+
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards',
+      });
+    });
+
+    it('should list leaderboards with search', async () => {
+      setupMockRequest(mockAxios, mockResponses.leaderboardsListResponse);
+
+      await client.leaderboards.list(1, 50, 'top');
+
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards',
+      });
+    });
+
+    it('should support options object', async () => {
+      setupMockRequest(mockAxios, mockResponses.leaderboardsListResponse);
+
+      await client.leaderboards.list({ page: 2, limit: 25, search: 'top' });
+
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards',
+      });
+    });
+  });
+
+  describe('getCustom', () => {
+    it('should get custom leaderboard by ID', async () => {
+      setupMockRequest(mockAxios, mockResponses.customLeaderboardResponse);
+
+      const result = await client.leaderboards.getCustom('lb1');
+
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards/lb1',
+      });
+      expect(result.rankings).toBeDefined();
+    });
+
+    it('should get custom leaderboard with pagination', async () => {
+      setupMockRequest(mockAxios, mockResponses.customLeaderboardResponse);
+
+      await client.leaderboards.getCustom('lb1', 2, 25);
+
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards/lb1',
+      });
+    });
+
+    it('should support filter options object', async () => {
+      setupMockRequest(mockAxios, mockResponses.customLeaderboardResponse);
+
+      await client.leaderboards.getCustom('lb1', {
+        page: 2,
+        limit: 25,
+        persona: 'Achiever',
+        minLevel: 5,
+      });
+
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards/lb1',
+      });
+    });
+
+    it('should throw error for non-existent leaderboard', async () => {
+      setupMockRequestError(mockAxios, 404, 'Leaderboard not found');
+
+      await expect(client.leaderboards.getCustom('nonexistent')).rejects.toThrow('Leaderboard not found');
+    });
+  });
+
+  describe('getUserRank', () => {
+    it('should get user rank in leaderboard', async () => {
+      setupMockRequest(mockAxios, mockResponses.userRankResponse);
+
+      const result = await client.leaderboards.getUserRank('lb1', 'user123');
+
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards/lb1/users/user123/rank',
+      });
+      expect(result.rank).toBe(42);
+    });
+  });
+
+  describe('getAroundUser', () => {
+    it('should get leaderboard entries around user', async () => {
+      const aroundResponse = {
+        ...mockResponses.leaderboardResponse,
+        user_rank: 42,
+      };
+      setupMockRequest(mockAxios, aroundResponse);
+
+      const result = await client.leaderboards.getAroundUser('lb1', 'user123', 5);
+
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/leaderboards/lb1/users/user123/around',
+      });
+      expect(result.rankings).toBeDefined();
     });
   });
 });

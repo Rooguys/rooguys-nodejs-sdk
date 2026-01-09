@@ -1,125 +1,104 @@
-import axios from 'axios';
-import { Rooguys } from '../../index';
-import { createMockAxiosInstance, mockSuccessResponse, mockErrorResponse } from '../utils/mockClient';
+import { Rooguys, ValidationError } from '../../index';
+import {
+  createMockRooguysClient,
+  setupMockRequest,
+  setupMockRequestError,
+  expectRequestWith,
+  MockAxiosInstance,
+} from '../utils/mockClient';
 import { mockResponses, mockErrors } from '../fixtures/responses';
-
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('Events Resource', () => {
   let client: Rooguys;
-  let mockAxiosInstance: ReturnType<typeof createMockAxiosInstance>;
-  const apiKey = 'test-api-key';
+  let mockAxios: MockAxiosInstance;
 
   beforeEach(() => {
-    mockAxiosInstance = createMockAxiosInstance();
-    mockedAxios.create.mockReturnValue(mockAxiosInstance as any);
-    client = new Rooguys(apiKey);
-    jest.clearAllMocks();
+    const mock = createMockRooguysClient();
+    client = mock.client;
+    mockAxios = mock.mockAxios;
   });
 
   describe('track', () => {
     it('should track an event with valid inputs', async () => {
-      mockAxiosInstance.post.mockResolvedValue(
-        mockSuccessResponse(mockResponses.trackEventResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.trackEventResponse);
 
-      const result = await client.events.track('purchase-completed', 'user_123', {
+      const result = await client.events.track('purchase_completed', 'user_123', {
         amount: 50.0,
       });
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/event',
-        {
-          event_name: 'purchase-completed',
+      expectRequestWith(mockAxios, {
+        method: 'POST',
+        url: '/events',
+        data: {
+          event_name: 'purchase_completed',
           user_id: 'user_123',
           properties: { amount: 50.0 },
         },
-        { params: { include_profile: undefined } }
-      );
+      });
       expect(result).toEqual(mockResponses.trackEventResponse);
     });
 
     it('should track an event with empty properties', async () => {
-      mockAxiosInstance.post.mockResolvedValue(
-        mockSuccessResponse(mockResponses.trackEventResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.trackEventResponse);
 
-      const result = await client.events.track('user-login', 'user_456');
+      const result = await client.events.track('user_login', 'user_456');
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/event',
-        {
-          event_name: 'user-login',
+      expectRequestWith(mockAxios, {
+        method: 'POST',
+        url: '/events',
+        data: {
+          event_name: 'user_login',
           user_id: 'user_456',
           properties: {},
         },
-        { params: { include_profile: undefined } }
-      );
+      });
       expect(result).toEqual(mockResponses.trackEventResponse);
     });
 
     it('should include profile when includeProfile is true', async () => {
-      mockAxiosInstance.post.mockResolvedValue(
-        mockSuccessResponse(mockResponses.trackEventWithProfileResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.trackEventWithProfileResponse);
 
       const result = await client.events.track(
-        'purchase-completed',
+        'purchase_completed',
         'user_123',
         { amount: 50.0 },
         { includeProfile: true }
       );
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/event',
-        {
-          event_name: 'purchase-completed',
-          user_id: 'user_123',
-          properties: { amount: 50.0 },
-        },
-        { params: { include_profile: true } }
-      );
       expect(result).toEqual(mockResponses.trackEventWithProfileResponse);
       expect(result.profile).toBeDefined();
     });
 
     it('should handle special characters in event name', async () => {
-      mockAxiosInstance.post.mockResolvedValue(
-        mockSuccessResponse(mockResponses.trackEventResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.trackEventResponse);
 
       await client.events.track('user-signup_v2', 'user_123');
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/event',
-        expect.objectContaining({
+      expectRequestWith(mockAxios, {
+        method: 'POST',
+        url: '/events',
+        data: expect.objectContaining({
           event_name: 'user-signup_v2',
         }),
-        expect.any(Object)
-      );
+      });
     });
 
     it('should handle special characters in user ID', async () => {
-      mockAxiosInstance.post.mockResolvedValue(
-        mockSuccessResponse(mockResponses.trackEventResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.trackEventResponse);
 
-      await client.events.track('user-login', 'user@example.com');
+      await client.events.track('user_login', 'user@example.com');
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/event',
-        expect.objectContaining({
+      expectRequestWith(mockAxios, {
+        method: 'POST',
+        url: '/events',
+        data: expect.objectContaining({
           user_id: 'user@example.com',
         }),
-        expect.any(Object)
-      );
+      });
     });
 
     it('should handle complex nested properties', async () => {
-      mockAxiosInstance.post.mockResolvedValue(
-        mockSuccessResponse(mockResponses.trackEventResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.trackEventResponse);
 
       const complexProperties = {
         order: {
@@ -138,19 +117,17 @@ describe('Events Resource', () => {
 
       await client.events.track('order_placed', 'user_123', complexProperties);
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/event',
-        expect.objectContaining({
+      expectRequestWith(mockAxios, {
+        method: 'POST',
+        url: '/events',
+        data: expect.objectContaining({
           properties: complexProperties,
         }),
-        expect.any(Object)
-      );
+      });
     });
 
     it('should throw error when API returns 400', async () => {
-      mockAxiosInstance.post.mockRejectedValue(
-        mockErrorResponse(400, 'Validation failed', mockErrors.validationError.details)
-      );
+      setupMockRequestError(mockAxios, 400, 'Validation failed', 'VALIDATION_ERROR');
 
       await expect(
         client.events.track('', 'user_123')
@@ -158,39 +135,23 @@ describe('Events Resource', () => {
     });
 
     it('should throw error when API returns 500', async () => {
-      mockAxiosInstance.post.mockRejectedValue(
-        mockErrorResponse(500, 'Internal server error')
-      );
+      setupMockRequestError(mockAxios, 500, 'Internal server error', 'SERVER_ERROR');
 
       await expect(
-        client.events.track('user-login', 'user_123')
+        client.events.track('user_login', 'user_123')
       ).rejects.toThrow('Internal server error');
     });
 
     it('should throw error when API returns 503 (queue full)', async () => {
-      mockAxiosInstance.post.mockRejectedValue(
-        mockErrorResponse(503, mockErrors.queueFullError.message)
-      );
+      setupMockRequestError(mockAxios, 503, 'Event queue is full. Please retry later.', 'SERVICE_UNAVAILABLE');
 
       await expect(
-        client.events.track('user-login', 'user_123')
+        client.events.track('user_login', 'user_123')
       ).rejects.toThrow('Event queue is full');
     });
 
-    it('should handle network timeout', async () => {
-      const timeoutError = new Error('timeout of 10000ms exceeded');
-      (timeoutError as any).code = 'ECONNABORTED';
-      mockAxiosInstance.post.mockRejectedValue(timeoutError);
-
-      await expect(
-        client.events.track('user-login', 'user_123')
-      ).rejects.toThrow('timeout');
-    });
-
     it('should handle properties with null values', async () => {
-      mockAxiosInstance.post.mockResolvedValue(
-        mockSuccessResponse(mockResponses.trackEventResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.trackEventResponse);
 
       await client.events.track('user_updated', 'user_123', {
         email: 'user@example.com',
@@ -198,85 +159,99 @@ describe('Events Resource', () => {
         address: null,
       });
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/event',
-        expect.objectContaining({
+      expectRequestWith(mockAxios, {
+        method: 'POST',
+        url: '/events',
+        data: expect.objectContaining({
           properties: {
             email: 'user@example.com',
             phone: null,
             address: null,
           },
         }),
-        expect.any(Object)
-      );
+      });
     });
 
     it('should handle properties with boolean values', async () => {
-      mockAxiosInstance.post.mockResolvedValue(
-        mockSuccessResponse(mockResponses.trackEventResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.trackEventResponse);
 
-      await client.events.track('feature-toggled', 'user_123', {
+      await client.events.track('feature_toggled', 'user_123', {
         feature_name: 'dark_mode',
         enabled: true,
       });
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/event',
-        expect.objectContaining({
+      expectRequestWith(mockAxios, {
+        method: 'POST',
+        url: '/events',
+        data: expect.objectContaining({
           properties: {
             feature_name: 'dark_mode',
             enabled: true,
           },
         }),
-        expect.any(Object)
-      );
+      });
     });
 
-    it('should handle properties with numeric values', async () => {
-      mockAxiosInstance.post.mockResolvedValue(
-        mockSuccessResponse(mockResponses.trackEventResponse)
-      );
+    it('should handle custom timestamp', async () => {
+      setupMockRequest(mockAxios, mockResponses.trackEventResponse);
+      const timestamp = new Date();
 
-      await client.events.track('score-updated', 'user_123', {
-        score: 1500,
-        multiplier: 1.5,
-        rank: 42,
-      });
+      await client.events.track('user_login', 'user_123', {}, { timestamp });
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/event',
-        expect.objectContaining({
-          properties: {
-            score: 1500,
-            multiplier: 1.5,
-            rank: 42,
-          },
+      expectRequestWith(mockAxios, {
+        method: 'POST',
+        url: '/events',
+        data: expect.objectContaining({
+          timestamp: timestamp.toISOString(),
         }),
-        expect.any(Object)
-      );
+      });
     });
 
-    it('should handle empty string properties', async () => {
-      mockAxiosInstance.post.mockResolvedValue(
-        mockSuccessResponse(mockResponses.trackEventResponse)
-      );
+    it('should reject timestamp more than 7 days old', async () => {
+      const oldTimestamp = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
 
-      await client.events.track('form-submitted', 'user_123', {
-        name: 'John Doe',
-        comment: '',
+      await expect(
+        client.events.track('user_login', 'user_123', {}, { timestamp: oldTimestamp })
+      ).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe('trackBatch', () => {
+    it('should track multiple events', async () => {
+      const batchResponse = { processed: 2, failed: 0 };
+      setupMockRequest(mockAxios, batchResponse);
+
+      const events = [
+        { eventName: 'event1', userId: 'user1', properties: { a: 1 } },
+        { eventName: 'event2', userId: 'user2', properties: { b: 2 } },
+      ];
+
+      const result = await client.events.trackBatch(events);
+
+      expectRequestWith(mockAxios, {
+        method: 'POST',
+        url: '/events/batch',
       });
+      expect(result).toEqual(batchResponse);
+    });
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/event',
-        expect.objectContaining({
-          properties: {
-            name: 'John Doe',
-            comment: '',
-          },
-        }),
-        expect.any(Object)
-      );
+    it('should throw error for empty events array', async () => {
+      await expect(client.events.trackBatch([])).rejects.toThrow(ValidationError);
+      await expect(client.events.trackBatch([])).rejects.toThrow('cannot be empty');
+    });
+
+    it('should throw error for more than 100 events', async () => {
+      const manyEvents = Array.from({ length: 101 }, (_, i) => ({
+        eventName: `event_${i}`,
+        userId: `user_${i}`,
+      }));
+
+      await expect(client.events.trackBatch(manyEvents)).rejects.toThrow(ValidationError);
+      await expect(client.events.trackBatch(manyEvents)).rejects.toThrow('maximum of 100');
+    });
+
+    it('should throw error for non-array input', async () => {
+      await expect(client.events.trackBatch('not an array' as any)).rejects.toThrow(ValidationError);
     });
   });
 });

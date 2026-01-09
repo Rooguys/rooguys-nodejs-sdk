@@ -1,32 +1,32 @@
-import axios from 'axios';
 import { Rooguys } from '../../index';
-import { createMockAxiosInstance, mockSuccessResponse, mockErrorResponse } from '../utils/mockClient';
+import {
+  createMockRooguysClient,
+  setupMockRequest,
+  setupMockRequestError,
+  expectRequestWith,
+  MockAxiosInstance,
+} from '../utils/mockClient';
 import { mockResponses, mockErrors } from '../fixtures/responses';
-
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('Levels Resource', () => {
   let client: Rooguys;
-  let mockAxiosInstance: ReturnType<typeof createMockAxiosInstance>;
-  const apiKey = 'test-api-key';
+  let mockAxios: MockAxiosInstance;
 
   beforeEach(() => {
-    mockAxiosInstance = createMockAxiosInstance();
-    mockedAxios.create.mockReturnValue(mockAxiosInstance as any);
-    client = new Rooguys(apiKey);
-    jest.clearAllMocks();
+    const mock = createMockRooguysClient();
+    client = mock.client;
+    mockAxios = mock.mockAxios;
   });
 
   describe('list', () => {
     it('should list levels with default parameters', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.levelsListResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.levelsListResponse);
 
       const result = await client.levels.list();
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/levels', {
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/levels',
         params: { page: 1, limit: 50 },
       });
       expect(result).toEqual(mockResponses.levelsListResponse);
@@ -34,13 +34,13 @@ describe('Levels Resource', () => {
     });
 
     it('should list levels with custom pagination', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.levelsListResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.levelsListResponse);
 
       await client.levels.list(2, 25);
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/levels', {
+      expectRequestWith(mockAxios, {
+        method: 'GET',
+        url: '/levels',
         params: { page: 2, limit: 25 },
       });
     });
@@ -55,7 +55,7 @@ describe('Levels Resource', () => {
           totalPages: 0,
         },
       };
-      mockAxiosInstance.get.mockResolvedValue(mockSuccessResponse(emptyResponse));
+      setupMockRequest(mockAxios, emptyResponse);
 
       const result = await client.levels.list();
 
@@ -64,9 +64,7 @@ describe('Levels Resource', () => {
     });
 
     it('should handle levels with all fields', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.levelsListResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.levelsListResponse);
 
       const result = await client.levels.list();
 
@@ -80,9 +78,7 @@ describe('Levels Resource', () => {
     });
 
     it('should handle levels sorted by level_number', async () => {
-      mockAxiosInstance.get.mockResolvedValue(
-        mockSuccessResponse(mockResponses.levelsListResponse)
-      );
+      setupMockRequest(mockAxios, mockResponses.levelsListResponse);
 
       const result = await client.levels.list();
 
@@ -91,9 +87,7 @@ describe('Levels Resource', () => {
     });
 
     it('should throw error for invalid pagination', async () => {
-      mockAxiosInstance.get.mockRejectedValue(
-        mockErrorResponse(400, mockErrors.invalidPaginationError.message)
-      );
+      setupMockRequestError(mockAxios, 400, 'Limit must be between 1 and 100');
 
       await expect(client.levels.list(1, 150)).rejects.toThrow(
         'Limit must be between 1 and 100'
@@ -101,9 +95,7 @@ describe('Levels Resource', () => {
     });
 
     it('should handle server error', async () => {
-      mockAxiosInstance.get.mockRejectedValue(
-        mockErrorResponse(500, 'Internal server error')
-      );
+      setupMockRequestError(mockAxios, 500, 'Internal server error');
 
       await expect(client.levels.list()).rejects.toThrow('Internal server error');
     });
@@ -127,7 +119,7 @@ describe('Levels Resource', () => {
           totalPages: 1,
         },
       };
-      mockAxiosInstance.get.mockResolvedValue(mockSuccessResponse(levelsWithNulls));
+      setupMockRequest(mockAxios, levelsWithNulls);
 
       const result = await client.levels.list();
 
